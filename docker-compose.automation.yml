@@ -1,0 +1,81 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres-automation
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - automation_net
+
+  qdrant:
+    image: qdrant/qdrant:v1.13.4
+    container_name: qdrant-automation
+    restart: unless-stopped
+    environment:
+      QDRANT_API_KEY: ${QDRANT_API_KEY}
+    ports:
+      - "${QDRANT_PORT}:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - automation_net
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n-automation
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT}:5678"
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres-automation
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_USER_MANAGEMENT_JWT_SECRET=${N8N_USER_MANAGEMENT_JWT_SECRET}
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - N8N_DEFAULT_BINARY_DATA_MODE=${N8N_DEFAULT_BINARY_DATA_MODE}
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - automation_net
+    depends_on:
+      - postgres
+      - qdrant
+
+  nocodb:
+    image: nocodb/nocodb:latest
+    container_name: nocodb-automation
+    restart: unless-stopped
+    ports:
+      - "${NOCODB_PORT}:8080"
+    environment:
+      NC_DB: "pg://postgres-automation:5432?u=${POSTGRES_USER}&p=${POSTGRES_PASSWORD}&d=${POSTGRES_DB}"
+    volumes:
+      - nocodb_data:/usr/app/data
+    networks:
+      - automation_net
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  n8n_data:
+  nocodb_data:
+
+networks:
+  automation_net:
+    external: true
